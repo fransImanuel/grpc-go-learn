@@ -9,18 +9,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-// type ImplementCalculator struct {
-// }
-
-// func (I *ImplementCalculator) Sum(ctx context.Context, in *calculatorpb.CalculatorRequest, opts ...grpc.CallOption) (*calculatorpb.CalculatorResponse, error) {
-// 	// return nil, status.Errorf(codes.Unimplemented, "method Greet not implemented")
-// 	fmt.Printf("Greet function was invoked with %v\n", in)
-// 	res := &calculatorpb.CalculatorResponse{
-// 		Result: 123,
-// 	}
-// 	return res, nil
-// }
-
 func main() {
 	fmt.Println("Hello World this is calculator server")
 
