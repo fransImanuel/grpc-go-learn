@@ -5,10 +5,12 @@ package calculatorpb
 import (
 	context "context"
 	"fmt"
+	"io"
+	"log"
 
 	grpc "google.golang.org/grpc"
-	// codes "google.golang.org/grpc/codes"
-	// status "google.golang.org/grpc/status"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -20,8 +22,12 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CalculatorServiceClient interface {
+	//unary
 	Sum(ctx context.Context, in *CalculatorRequest, opts ...grpc.CallOption) (*CalculatorResponse, error)
+	//server streaming
 	PrimeNumber(ctx context.Context, in *CalculatorPrimeRequest, opts ...grpc.CallOption) (CalculatorService_PrimeNumberClient, error)
+	//client streaming
+	ComputeAverage(ctx context.Context, opts ...grpc.CallOption) (CalculatorService_ComputeAverageClient, error)
 }
 
 type calculatorServiceClient struct {
@@ -73,12 +79,50 @@ func (x *calculatorServicePrimeNumberClient) Recv() (*CalculatorPrimeResponse, e
 	return m, nil
 }
 
+func (c *calculatorServiceClient) ComputeAverage(ctx context.Context, opts ...grpc.CallOption) (CalculatorService_ComputeAverageClient, error) {
+	stream, err := c.cc.NewStream(ctx, &CalculatorService_ServiceDesc.Streams[1], "/calculator.calculatorService/computeAverage", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &calculatorServiceComputeAverageClient{stream}
+	return x, nil
+}
+
+type CalculatorService_ComputeAverageClient interface {
+	Send(*ComputeAverageRequest) error
+	CloseAndRecv() (*ComputeAverageResponse, error)
+	grpc.ClientStream
+}
+
+type calculatorServiceComputeAverageClient struct {
+	grpc.ClientStream
+}
+
+func (x *calculatorServiceComputeAverageClient) Send(m *ComputeAverageRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *calculatorServiceComputeAverageClient) CloseAndRecv() (*ComputeAverageResponse, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(ComputeAverageResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // CalculatorServiceServer is the server API for CalculatorService service.
 // All implementations must embed UnimplementedCalculatorServiceServer
 // for forward compatibility
 type CalculatorServiceServer interface {
+	//unary
 	Sum(context.Context, *CalculatorRequest) (*CalculatorResponse, error)
+	//server streaming
 	PrimeNumber(*CalculatorPrimeRequest, CalculatorService_PrimeNumberServer) error
+	//client streaming
+	ComputeAverage(CalculatorService_ComputeAverageServer) error
 	mustEmbedUnimplementedCalculatorServiceServer()
 }
 
@@ -86,35 +130,33 @@ type CalculatorServiceServer interface {
 type UnimplementedCalculatorServiceServer struct {
 }
 
-func (UnimplementedCalculatorServiceServer) Sum(ctx context.Context, in *CalculatorRequest) (*CalculatorResponse, error) {
-	// return nil, status.Errorf(codes.Unimplemented, "method Sum not implemented")
-	fmt.Printf("Received Sum RPC:%v\n", in)
-	num1 := in.GetNum1()
-	num2 := in.GetNum2()
-	result := num1 + num2
-	res := &CalculatorResponse{
-		Result: result,
-	}
-	return res, nil
+func (UnimplementedCalculatorServiceServer) Sum(context.Context, *CalculatorRequest) (*CalculatorResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Sum not implemented")
 }
-func (UnimplementedCalculatorServiceServer) PrimeNumber(req *CalculatorPrimeRequest, stream CalculatorService_PrimeNumberServer) error {
-	// return status.Errorf(codes.Unimplemented, "method PrimeNumber not implemented")
-	fmt.Printf("Received Sum RPC:%v\n", req)
-
-	//logic for find prime decomposition
-	var k int64 = 2
-	var number int64 = req.Number
-	for number > 1 {
-		if number%k == 0 {
-			// fmt.Println(k)
-			res := &CalculatorPrimeResponse{Number: k}
-			stream.Send(res)
-			number = number / k
-		} else {
-			k++
+func (UnimplementedCalculatorServiceServer) PrimeNumber(*CalculatorPrimeRequest, CalculatorService_PrimeNumberServer) error {
+	return status.Errorf(codes.Unimplemented, "method PrimeNumber not implemented")
+}
+func (UnimplementedCalculatorServiceServer) ComputeAverage(stream CalculatorService_ComputeAverageServer) error {
+	// return status.Errorf(codes.Unimplemented, "method ComputeAverage not implemented")
+	fmt.Println("ComputeAverage function was invoked with a streaming request\n")
+	var result float64
+	var i float64 = 0
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			result = result / i
+			return stream.SendAndClose(&ComputeAverageResponse{
+				AVGResult: int64(result),
+			})
 		}
+		if err != nil {
+			log.Fatal("Error while reading client stream: %v", err)
+		}
+		i++
+		number := req.GetNumber()
+		result = result + float64(number)
 	}
-	return nil
+
 }
 func (UnimplementedCalculatorServiceServer) mustEmbedUnimplementedCalculatorServiceServer() {}
 
@@ -168,6 +210,32 @@ func (x *calculatorServicePrimeNumberServer) Send(m *CalculatorPrimeResponse) er
 	return x.ServerStream.SendMsg(m)
 }
 
+func _CalculatorService_ComputeAverage_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(CalculatorServiceServer).ComputeAverage(&calculatorServiceComputeAverageServer{stream})
+}
+
+type CalculatorService_ComputeAverageServer interface {
+	SendAndClose(*ComputeAverageResponse) error
+	Recv() (*ComputeAverageRequest, error)
+	grpc.ServerStream
+}
+
+type calculatorServiceComputeAverageServer struct {
+	grpc.ServerStream
+}
+
+func (x *calculatorServiceComputeAverageServer) SendAndClose(m *ComputeAverageResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *calculatorServiceComputeAverageServer) Recv() (*ComputeAverageRequest, error) {
+	m := new(ComputeAverageRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // CalculatorService_ServiceDesc is the grpc.ServiceDesc for CalculatorService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -185,6 +253,11 @@ var CalculatorService_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "primeNumber",
 			Handler:       _CalculatorService_PrimeNumber_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "computeAverage",
+			Handler:       _CalculatorService_ComputeAverage_Handler,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "calculator/calculatorpb/calculator.proto",

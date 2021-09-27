@@ -20,7 +20,13 @@ message calculatorPrimeResponse{
     int64 number = 1;
 }
 
-message 
+message computeAverageRequest{
+    int64 number = 1;
+}
+
+message computeAverageResponse{
+    int64 AVGResult = 1;
+}
 
 service calculatorService{
     //unary
@@ -30,5 +36,5 @@ service calculatorService{
     rpc primeNumber(calculatorPrimeRequest) returns (stream calculatorPrimeResponse);
 
     //client streaming
-    rpc computeAverage()
+    rpc computeAverage(stream computeAverageRequest) returns (computeAverageResponse);
 }
