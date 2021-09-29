@@ -1,0 +1,40 @@
+syntax="proto3";
+
+package calculator;
+option go_package = "./calculator/calculatorpb";
+
+message calculatorRequest{
+    int64 num1= 1;
+    int64 num2= 2;
+}
+
+message calculatorResponse{
+    int64 result=1;
+}
+
+message calculatorPrimeRequest{
+    int64 number = 1;
+}
+
+message calculatorPrimeResponse{
+    int64 number = 1;
+}
+
+message computeAverageRequest{
+    int64 number = 1;
+}
+
+message computeAverageResponse{
+    int64 AVGResult = 1;
+}
+
+service calculatorService{
+    //unary
+    rpc Sum(calculatorRequest) returns (calculatorResponse);
+
+    //server streaming
+    rpc primeNumber(calculatorPrimeRequest) returns (stream calculatorPrimeResponse);
+
+    //client streaming
+    rpc computeAverage(stream computeAverageRequest) returns (computeAverageResponse);
+}
