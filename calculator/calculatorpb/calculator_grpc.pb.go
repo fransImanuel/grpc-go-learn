@@ -28,6 +28,8 @@ type CalculatorServiceClient interface {
 	PrimeNumber(ctx context.Context, in *CalculatorPrimeRequest, opts ...grpc.CallOption) (CalculatorService_PrimeNumberClient, error)
 	//client streaming
 	ComputeAverage(ctx context.Context, opts ...grpc.CallOption) (CalculatorService_ComputeAverageClient, error)
+	//bidi streaming
+	FindMaximum(ctx context.Context, opts ...grpc.CallOption) (CalculatorService_FindMaximumClient, error)
 }
 
 type calculatorServiceClient struct {
@@ -113,6 +115,37 @@ func (x *calculatorServiceComputeAverageClient) CloseAndRecv() (*ComputeAverageR
 	return m, nil
 }
 
+func (c *calculatorServiceClient) FindMaximum(ctx context.Context, opts ...grpc.CallOption) (CalculatorService_FindMaximumClient, error) {
+	stream, err := c.cc.NewStream(ctx, &CalculatorService_ServiceDesc.Streams[2], "/calculator.calculatorService/findMaximum", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &calculatorServiceFindMaximumClient{stream}
+	return x, nil
+}
+
+type CalculatorService_FindMaximumClient interface {
+	Send(*FindMaxRequest) error
+	Recv() (*FindMaxResponse, error)
+	grpc.ClientStream
+}
+
+type calculatorServiceFindMaximumClient struct {
+	grpc.ClientStream
+}
+
+func (x *calculatorServiceFindMaximumClient) Send(m *FindMaxRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *calculatorServiceFindMaximumClient) Recv() (*FindMaxResponse, error) {
+	m := new(FindMaxResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // CalculatorServiceServer is the server API for CalculatorService service.
 // All implementations must embed UnimplementedCalculatorServiceServer
 // for forward compatibility
@@ -123,6 +156,8 @@ type CalculatorServiceServer interface {
 	PrimeNumber(*CalculatorPrimeRequest, CalculatorService_PrimeNumberServer) error
 	//client streaming
 	ComputeAverage(CalculatorService_ComputeAverageServer) error
+	//bidi streaming
+	FindMaximum(CalculatorService_FindMaximumServer) error
 	mustEmbedUnimplementedCalculatorServiceServer()
 }
 
@@ -136,27 +171,40 @@ func (UnimplementedCalculatorServiceServer) Sum(context.Context, *CalculatorRequ
 func (UnimplementedCalculatorServiceServer) PrimeNumber(*CalculatorPrimeRequest, CalculatorService_PrimeNumberServer) error {
 	return status.Errorf(codes.Unimplemented, "method PrimeNumber not implemented")
 }
-func (UnimplementedCalculatorServiceServer) ComputeAverage(stream CalculatorService_ComputeAverageServer) error {
-	// return status.Errorf(codes.Unimplemented, "method ComputeAverage not implemented")
-	fmt.Println("ComputeAverage function was invoked with a streaming request\n")
-	var result float64
-	var i float64 = 0
-	for {
+func (UnimplementedCalculatorServiceServer) ComputeAverage(CalculatorService_ComputeAverageServer) error {
+	return status.Errorf(codes.Unimplemented, "method ComputeAverage not implemented")
+}
+func (UnimplementedCalculatorServiceServer) FindMaximum(stream CalculatorService_FindMaximumServer) error {
+	// return status.Errorf(codes.Unimplemented, "method FindMaximum not implemented")
+	fmt.Println("FindMaximum function was invoked with a Bidi request\n")
+	var numberStub []int
+	var temp int = 0
+
+	for{
 		req, err := stream.Recv()
 		if err == io.EOF {
-			result = result / i
-			return stream.SendAndClose(&ComputeAverageResponse{
-				AVGResult: int64(result),
-			})
+			return nil
 		}
 		if err != nil {
-			log.Fatal("Error while reading client stream: %v", err)
+			log.Fatalf("Error while reading client stream: %v", err)
+			return err
 		}
-		i++
-		number := req.GetNumber()
-		result = result + float64(number)
-	}
+		inputNumber := req.GetNumber()
 
+		//check input (is this input bigger than before or not)
+		numberStub = append(numberStub, int(inputNumber))
+		for _, number := range numberStub {
+			if temp <= number {
+				temp = number
+			}
+		}
+		
+		if temp <= int(inputNumber) {
+			stream.Send(&FindMaxResponse{
+				Number: inputNumber,
+			})
+		}
+	}
 }
 func (UnimplementedCalculatorServiceServer) mustEmbedUnimplementedCalculatorServiceServer() {}
 
@@ -236,6 +284,32 @@ func (x *calculatorServiceComputeAverageServer) Recv() (*ComputeAverageRequest, 
 	return m, nil
 }
 
+func _CalculatorService_FindMaximum_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(CalculatorServiceServer).FindMaximum(&calculatorServiceFindMaximumServer{stream})
+}
+
+type CalculatorService_FindMaximumServer interface {
+	Send(*FindMaxResponse) error
+	Recv() (*FindMaxRequest, error)
+	grpc.ServerStream
+}
+
+type calculatorServiceFindMaximumServer struct {
+	grpc.ServerStream
+}
+
+func (x *calculatorServiceFindMaximumServer) Send(m *FindMaxResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *calculatorServiceFindMaximumServer) Recv() (*FindMaxRequest, error) {
+	m := new(FindMaxRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // CalculatorService_ServiceDesc is the grpc.ServiceDesc for CalculatorService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -257,6 +331,12 @@ var CalculatorService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "computeAverage",
 			Handler:       _CalculatorService_ComputeAverage_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "findMaximum",
+			Handler:       _CalculatorService_FindMaximum_Handler,
+			ServerStreams: true,
 			ClientStreams: true,
 		},
 	},

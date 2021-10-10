@@ -28,6 +28,14 @@ message computeAverageResponse{
     int64 AVGResult = 1;
 }
 
+message findMaxRequest{
+    int64 number=1;
+}
+
+message findMaxResponse{
+    int64 number= 1;
+}
+
 service calculatorService{
     //unary
     rpc Sum(calculatorRequest) returns (calculatorResponse);
@@ -37,4 +45,7 @@ service calculatorService{
 
     //client streaming
     rpc computeAverage(stream computeAverageRequest) returns (computeAverageResponse);
+
+    //bidi streaming
+    rpc findMaximum(stream findMaxRequest) returns (stream findMaxResponse);
 }
