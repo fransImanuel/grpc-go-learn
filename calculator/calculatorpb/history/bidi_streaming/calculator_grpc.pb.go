@@ -5,7 +5,8 @@ package calculatorpb
 import (
 	context "context"
 	"fmt"
-	"math"
+	"io"
+	"log"
 
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
@@ -29,10 +30,6 @@ type CalculatorServiceClient interface {
 	ComputeAverage(ctx context.Context, opts ...grpc.CallOption) (CalculatorService_ComputeAverageClient, error)
 	//bidi streaming
 	FindMaximum(ctx context.Context, opts ...grpc.CallOption) (CalculatorService_FindMaximumClient, error)
-	//error handling
-	// this RPC will throw an exceotion error if the sent number is negative
-	// the error being sent is of type INVALID_ARGUMENT
-	SquareRoot(ctx context.Context, in *SquareRootRequest, opts ...grpc.CallOption) (*SquareRootResponse, error)
 }
 
 type calculatorServiceClient struct {
@@ -149,15 +146,6 @@ func (x *calculatorServiceFindMaximumClient) Recv() (*FindMaxResponse, error) {
 	return m, nil
 }
 
-func (c *calculatorServiceClient) SquareRoot(ctx context.Context, in *SquareRootRequest, opts ...grpc.CallOption) (*SquareRootResponse, error) {
-	out := new(SquareRootResponse)
-	err := c.cc.Invoke(ctx, "/calculator.calculatorService/SquareRoot", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // CalculatorServiceServer is the server API for CalculatorService service.
 // All implementations must embed UnimplementedCalculatorServiceServer
 // for forward compatibility
@@ -170,10 +158,6 @@ type CalculatorServiceServer interface {
 	ComputeAverage(CalculatorService_ComputeAverageServer) error
 	//bidi streaming
 	FindMaximum(CalculatorService_FindMaximumServer) error
-	//error handling
-	// this RPC will throw an exceotion error if the sent number is negative
-	// the error being sent is of type INVALID_ARGUMENT
-	SquareRoot(context.Context, *SquareRootRequest) (*SquareRootResponse, error)
 	mustEmbedUnimplementedCalculatorServiceServer()
 }
 
@@ -190,23 +174,37 @@ func (UnimplementedCalculatorServiceServer) PrimeNumber(*CalculatorPrimeRequest,
 func (UnimplementedCalculatorServiceServer) ComputeAverage(CalculatorService_ComputeAverageServer) error {
 	return status.Errorf(codes.Unimplemented, "method ComputeAverage not implemented")
 }
-func (UnimplementedCalculatorServiceServer) FindMaximum(CalculatorService_FindMaximumServer) error {
-	return status.Errorf(codes.Unimplemented, "method FindMaximum not implemented")
-}
+func (UnimplementedCalculatorServiceServer) FindMaximum(stream CalculatorService_FindMaximumServer) error {
+	// return status.Errorf(codes.Unimplemented, "method FindMaximum not implemented")
+	fmt.Println("FindMaximum function was invoked with a Bidi request\n")
+	var numberStub []int
+	var temp int = 0
 
-func (UnimplementedCalculatorServiceServer) SquareRoot(ctx context.Context, req *SquareRootRequest) (*SquareRootResponse, error) {
-	// return nil, status.Errorf(codes.Unimplemented, "method SquareRoot not implemented")
-	fmt.Println("Received SquareRoot RPC")
-	number := req.GetNumber()
-	if number < 0 {
-		return nil, status.Errorf(
-			codes.InvalidArgument,
-			fmt.Sprintf("Recevied a negative number: %v", number),
-		)
+	for{
+		req, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			log.Fatalf("Error while reading client stream: %v", err)
+			return err
+		}
+		inputNumber := req.GetNumber()
+
+		//check input (is this input bigger than before or not)
+		numberStub = append(numberStub, int(inputNumber))
+		for _, number := range numberStub {
+			if temp <= number {
+				temp = number
+			}
+		}
+		
+		if temp <= int(inputNumber) {
+			stream.Send(&FindMaxResponse{
+				Number: inputNumber,
+			})
+		}
 	}
-	return &SquareRootResponse{
-		NumberRoot: float32(math.Sqrt(float64(number))),
-	}, nil
 }
 func (UnimplementedCalculatorServiceServer) mustEmbedUnimplementedCalculatorServiceServer() {}
 
@@ -312,24 +310,6 @@ func (x *calculatorServiceFindMaximumServer) Recv() (*FindMaxRequest, error) {
 	return m, nil
 }
 
-func _CalculatorService_SquareRoot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SquareRootRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(CalculatorServiceServer).SquareRoot(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/calculator.calculatorService/SquareRoot",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CalculatorServiceServer).SquareRoot(ctx, req.(*SquareRootRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // CalculatorService_ServiceDesc is the grpc.ServiceDesc for CalculatorService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -340,10 +320,6 @@ var CalculatorService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Sum",
 			Handler:    _CalculatorService_Sum_Handler,
-		},
-		{
-			MethodName: "SquareRoot",
-			Handler:    _CalculatorService_SquareRoot_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -36,14 +36,6 @@ message findMaxResponse{
     int64 number= 1;
 }
 
-message SquareRootRequest{
-    int64 number=1;
-}
-
-message SquareRootResponse{
-    float number_root=1;
-}
-
 service calculatorService{
     //unary
     rpc Sum(calculatorRequest) returns (calculatorResponse);
@@ -56,9 +48,4 @@ service calculatorService{
 
     //bidi streaming
     rpc findMaximum(stream findMaxRequest) returns (stream findMaxResponse);
-
-    //error handling
-    // this RPC will throw an exceotion error if the sent number is negative
-    // the error being sent is of type INVALID_ARGUMENT
-    rpc SquareRoot(SquareRootRequest) returns (SquareRootResponse){};
 }

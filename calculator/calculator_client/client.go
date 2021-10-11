@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func main() {
@@ -25,7 +27,8 @@ func main() {
 	// doUnary(c)
 	// doServerStreaming(c)
 	// doClientStreaming(c)
-	doBidiStreaming(c)
+	// doBidiStreaming(c)
+	doErrorUnary(c)
 }
 
 func doUnary(c calculatorpb.CalculatorServiceClient) {
@@ -99,43 +102,26 @@ func doClientStreaming(c calculatorpb.CalculatorServiceClient) {
 	fmt.Printf("ComputeAverage Response: %v\n", res)
 }
 
-func doBidiStreaming(c calculatorpb.CalculatorServiceClient){
+func doBidiStreaming(c calculatorpb.CalculatorServiceClient) {
 	fmt.Println("Starting to do a Bidi Streaming RPC...")
 
 	//we create a stream by invoking the client
 	stream, err := c.FindMaximum(context.Background())
 	if err != nil {
-		log.Fatalf("Error while creating streaming: %v",err)
+		log.Fatalf("Error while creating streaming: %v", err)
 	}
 
-	requests:= []*calculatorpb.FindMaxRequest{
-		&calculatorpb.FindMaxRequest{
-			Number: 1,
-		},
-		&calculatorpb.FindMaxRequest{
-			Number: 5,
-		},
-		&calculatorpb.FindMaxRequest{
-			Number: 3,
-		},
-		&calculatorpb.FindMaxRequest{
-			Number: 6,
-		},
-		&calculatorpb.FindMaxRequest{
-			Number: 2,
-		},
-		&calculatorpb.FindMaxRequest{
-			Number: 20,
-		},
-	}
+	numbers := []int32{4, 7, 2, 19, 4, 6, 32}
 
 	waitc := make(chan struct{})
 	//we send a bunch of messages to the client (go routine)
 	go func() {
 		//function to send bunch of messsages
-		for _, req := range requests {
-			fmt.Printf("Sendding Message: %v\n", req)
-			stream.Send(req)
+		for _, number := range numbers {
+			fmt.Printf("Sendding Message: %v\n", number)
+			stream.Send(&calculatorpb.FindMaxRequest{
+				Number: int64(number),
+			})
 			time.Sleep(1000 * time.Millisecond)
 		}
 		stream.CloseSend()
@@ -143,14 +129,14 @@ func doBidiStreaming(c calculatorpb.CalculatorServiceClient){
 
 	// we receive a bunch of messages from the client (go routine)
 	go func() {
-		for{
+		for {
 			//function to receive a bunch of messages
-			res,err := stream.Recv()
+			res, err := stream.Recv()
 			if err == io.EOF {
-				break;
+				break
 			}
 			if err != nil {
-				log.Fatalf("Error while receive: %v",err)
+				log.Fatalf("Error while receive: %v", err)
 				break
 			}
 			fmt.Printf("Received: %v\n", res.GetNumber())
@@ -160,4 +146,34 @@ func doBidiStreaming(c calculatorpb.CalculatorServiceClient){
 
 	//block until everything is done
 	<-waitc
+}
+
+func doErrorUnary(c calculatorpb.CalculatorServiceClient) {
+	fmt.Println("Starting to do a SquareRoot Unary RPC...")
+
+	//correct call
+	doErrorCall(c, 10)
+
+	//error call
+	doErrorCall(c, -2)
+}
+
+func doErrorCall(c calculatorpb.CalculatorServiceClient, n int32) {
+	res, err := c.SquareRoot(context.Background(), &calculatorpb.SquareRootRequest{Number: int64(n)})
+
+	if err != nil {
+		respError, ok := status.FromError(err)
+		if ok {
+			fmt.Printf("Error Message From Server : %v\n", respError.Message())
+			fmt.Println(respError.Code())
+			if respError.Code() == codes.InvalidArgument {
+				fmt.Println("We Probably Sent a Negative Number!")
+				return
+			}
+		} else {
+			log.Fatalf("Big Error calling squareroot: %v", err)
+			return
+		}
+	}
+	fmt.Printf("Result of SquareRoot of %v : %v\n", n, res.GetNumberRoot())
 }
