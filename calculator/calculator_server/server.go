@@ -11,6 +11,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 )
 
@@ -99,7 +100,6 @@ func (server) FindMaximum(stream calculatorpb.CalculatorService_FindMaximumServe
 		}
 	}
 }
-
 func (server) SquareRoot(ctx context.Context, req *calculatorpb.SquareRootRequest) (*calculatorpb.SquareRootResponse, error) {
 	// return nil, status.Errorf(codes.Unimplemented, "method SquareRoot not implemented")
 	fmt.Println("Received SquareRoot RPC")
@@ -125,6 +125,10 @@ func main() {
 
 	s := grpc.NewServer()
 	calculatorpb.RegisterCalculatorServiceServer(s, &server{})
+
+	// Register reflection service on gRPC server.
+	reflection.Register(s)
+
 	err = s.Serve(lis)
 	if err != nil {
 		log.Fatalf("failed to serve: %v", err)
